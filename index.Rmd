@@ -99,7 +99,7 @@ ggplot(top_totals, aes(x = reorder(state, -tot_cases_per_population),
                        fill = vote)) + 
   geom_bar(stat = "identity", alpha = 5/6) +
   # love the fivethirtyeight theme
-  theme_fivethirtyeight() +
+  #theme_fivethirtyeight() +
   # adding percentage labels
   scale_y_continuous(labels = scales::percent) +
   labs(
@@ -141,7 +141,7 @@ ggplot(top_3_over_time, aes(x = date, y = case_per_pop, color = vote, shape = st
   geom_line() +
   scale_color_manual(values = c("blue", "red"),
                      name = "Political Leaning") +
-  theme_fivethirtyeight() + 
+  #theme_fivethirtyeight() + 
     scale_y_continuous(labels = scales::percent) +
   labs(
     title = "Top 3 Impacted States by Political Leaning",
@@ -204,7 +204,7 @@ ggplot(top_3_lag_over_time,
   scale_y_continuous(labels = scales::percent) +
   scale_color_manual(values = c("blue", "red"),
                      name = "Political Leaning") +
-  theme_fivethirtyeight() + 
+  #theme_fivethirtyeight() + 
   labs(
     title = "Percent Increase in Daily Cases",
     subtitle = "7-day rolling average for most impacted states"
@@ -240,7 +240,7 @@ vote_aggregated_data <- full_df %>%
 ggplot(vote_aggregated_data, aes(x = date,  y = rolling_lag/100, color = vote)) +
   geom_point() +
   geom_line() +
-  theme_fivethirtyeight() +
+  #theme_fivethirtyeight() +
   scale_y_continuous(labels = scales::percent) +
   scale_color_manual(values = c("blue", "red"),
                      name = "Political Leaning") +
