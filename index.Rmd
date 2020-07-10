@@ -1,0 +1,251 @@
+---
+title: "COVID Response: a political battle"
+author: "Brennan T. Beal, PharmD"
+output: 
+  html_document:
+      theme: simplex
+      code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      warning = FALSE,
+                      dev.args=list(bg="transparent"),
+                      fig.align = 'center')
+library(zoo)
+library(lubridate)
+library(tidyverse)
+library(ggthemes)
+
+theme_set(theme_fivethirtyeight())
+theme_update(panel.background = element_rect(fill = "transparent", colour = NA),
+             plot.background = element_rect(fill = "transparent", colour = NA))
+```
+
+In keeping track of the political pundits, you can make a guess about the political leanings of a person simply by whether or not one thinks masks are a good idea. Unfortunately in such a polarized world, the words of our Governors and the President can have far-reaching health impacts. Because we now have amassed *a lot* of COVID-19 data, we can see that this is true to some extent.  
+  
+Note that this is hypothesis generating and meant to be exploratory. Also, we'll mostly focus on cases since death is a lagging indicator and some function of cases.  
+  
+### The Available Data
+To look at how states are doing compared to their political counterparts, we need a few pieces of information:  
+  
+  1. State-level COVID-19 data
+  2. State voting history
+  3. State population data
+  
+Fortunately for us, the [New York Times](https://www.nytimes.com/interactive/2020/us/coronavirus-us-cases.html) has a published a really nice github repository tracking cases, deaths, and other metrics based on reports from state and local health agencies that we can use for our COVID-19 data.  
+  
+For the state voting data, the process was a little less clear. First, how should we define a state's political leanings? There are a lot of states that we would consider swing states, or states that have a fairly unpredictable voting outcome cycle-to-cycle. Then, there are those with more predictable voting habits (Texas and California, for example). For the purposes of this analysis, I decided that I would use only states in the latter category. So, I chose states that had voted the same way, Republican or Democrat (red and blue, respecitvely), for at least the last four election cycles.  
+  
+To gather this data, I used a website, [270towin](https://www.270towin.com/state-electoral-vote-history/) that has a nice repository of historical voting outcomes by state. We probably could've scraped the data but it was quicker to just the qualifying states into a data frame myself.  
+  
+Finally, I needed census data to properly assess individual states towards the beginning of the inquiry. I pulled 2019 census data from the [US Government's website](https://www.census.gov/data/tables/time-series/demo/popest/2010s-state-total.html#par_textimage_1574439295). 
+  
+```{r}
+# Here I'm just copying in data from the 270 to win website
+# You can see all the states represented (plus D.C.)
+state_voting_results <- data.frame(
+  state = c("Alabama", "Alaska", "Arizona", "Arkansas", "California", "Conneticut", "Delaware", 
+            "District of Columbia", "Hawaii", "Georgia", "Idaho", "Illinois", "Kansas", "Kentucky", "Louisiana",
+            "Maryland", "Massachusetts","Minnessota", "Mississippi", "Missouri", "Montana", "Nebraska", 
+            "New Hampshire", "New Jersey", "New York", "North Dakota", "Oklahoma", "Oregon", "Rhode Island", 
+            "South Carolina", "South Dakota", "Tennessee", "Texas", 
+            "Utah", "Vermont", "Washington", "West Virginia", "Wyoming"),
+  vote  = c(rep("Red", 4), rep("Blue", 5), "Red", "Red", "Blue", rep("Red", 3), 
+            rep("Blue", 3), rep("Red", 4), rep("Blue", 3), rep("Red", 2), 
+            rep("Blue", 2), rep("Red", 5),
+            rep("Blue", 2), rep("Red", 2))
+)
+
+# And state covid data from NYT: https://github.com/nytimes/covid-19-data
+state_covid_data <- read.csv2("us-states.csv", sep = ",", header = TRUE) %>% 
+  # I noticed later that dates were read in as factors... classic.
+  mutate(date = as.Date(date))
+
+# --- 2019 Census Data (was fairly ugly data)
+census <- read.csv("census.csv", header = TRUE)
+names(census) <- c("state", "population") # change first name to lowercase state
+census <- census[-1,] # remove first row, which was column title
+
+census <- census %>%  # states have "." before them...
+  mutate(state = str_remove(state, "."),
+         population = as.numeric(str_remove_all(population, ","))) # pop is a character with comma separating
+
+# Merge these all together by state:
+full_df <- state_covid_data %>% 
+  left_join(., state_voting_results, by = "state") %>% 
+  left_join(., census, by = "state")
+```
+
+First, what are the states (on each side of the aisle) with the worst case numbers and are they represented in the our voting data? This is a brief attempt at fairness.  
+  
+What are the top 3 totals?
+  
+```{r}
+
+top_totals <- full_df %>% 
+  # since they're cumulative cases, 
+  # we can just take the max number per state
+  group_by(state) %>% 
+  mutate(tot_cases_per_population = max(cases)/population) %>% 
+  ungroup() %>% 
+  distinct(state, .keep_all = TRUE) %>% 
+  slice_max(tot_cases_per_population, n = 6)
+
+# Taking a peak at the data, it looks like 4 blue states and 2 red states represent the worst of it, per population
+# All of them are represented in out voting data as well. So that's nice.
+ggplot(top_totals, aes(x = reorder(state, -tot_cases_per_population),
+                       y = tot_cases_per_population, 
+                       fill = vote)) + 
+  geom_bar(stat = "identity", alpha = 5/6) +
+  # love the fivethirtyeight theme
+  theme_fivethirtyeight() +
+  # adding percentage labels
+  scale_y_continuous(labels = scales::percent) +
+  labs(
+    title = "States With The Worst Cases per Capita",
+    subtitle = "Stratified by their political leanings"
+  ) + 
+  guides(fill = FALSE) +
+  scale_fill_manual(values = c("blue", "red"),
+                     name = "Political Leaning")
+  
+
+```
+
+No big surprises here. The North East was hit fairly hard. Though, not to be bested, Arizona and Louisiana also found their way to the top. But the whole point here was to make sure that the states that may have had the worst of it are represented, which it seems like they are.  
+  
+But I'm not necessarily worried about the case totals. A lot of states on both sides of the aisle were struggling to contain outbreak towards the beginning. Let's look at the top 3 states for each voting pattern over time (regarding their cumulative cases).  
+  
+```{r}
+top_3 <- full_df %>% 
+  # get rid of states w/ inconsistent voting
+  filter(!is.na(vote)) %>% 
+  group_by(state) %>% 
+  mutate(tot_cases_per_population = max(cases)/population) %>% 
+  ungroup() %>% 
+  distinct(state, .keep_all = TRUE) %>% 
+  group_by(vote) %>% 
+  # take the top 3 cases per each voting type
+  slice_max(tot_cases_per_population, n = 3) %>% 
+  # pull state out as a vector
+  pull(state)
+
+top_3_over_time <- full_df %>% 
+  # subset by top 3 states in each category
+  filter(state %in% top_3) %>% 
+  mutate(case_per_pop = cases/population)
+
+ggplot(top_3_over_time, aes(x = date, y = case_per_pop, color = vote, shape = state)) +
+  geom_point() +
+  geom_line() +
+  scale_color_manual(values = c("blue", "red"),
+                     name = "Political Leaning") +
+  theme_fivethirtyeight() + 
+    scale_y_continuous(labels = scales::percent) +
+  labs(
+    title = "Top 3 Impacted States by Political Leaning",
+    subtitle = "by cumulative cases as a percent of their population"
+  ) +
+  guides(color = FALSE) +
+  # Let's add some annotations:
+  # # annotations for blue states
+  annotate(geom = "curve", x = (as.Date("2020-05-01")), y = 0.0175, xend = (as.Date("2020-05-01")-5), yend = 0.018,
+           curvature = .2, color = "blue", arrow = arrow(length = unit(1, "mm")), alpha = 0.4) +
+  annotate(geom = "text",  x = (as.Date("2020-05-01")-20), y = 0.018, size = 4.5,
+           label = "'Masks work...'",
+           hjust = "left",
+           lineheight = 1.0,
+           color = "blue",
+           alpha = 0.7) +
+  # # annotations for red states
+  annotate(geom = "curve", x = (as.Date("2020-06-01") + 1), y = 0.0023, xend = (as.Date("2020-06-01")+5), yend = 0.0018,
+           curvature = .2, color = "red", arrow = arrow(length = unit(1, "mm")), alpha = 0.4) +
+  annotate(geom = "text",  x = (as.Date("2020-06-01") + 6), y = 0.002, size = 4.5,
+           label = "'... Nope.'",
+           hjust = "left",
+           lineheight = 1.0,
+           alpha = 0.6,
+           color = "red")
+
+```
+  
+This kind of gets at my prior assumptions. True, the top 3 blue states (states that I anticipated to be a bit more concerned), tend to have more cases per population, what really matters in epidemiology is the *rate* of increase. How quickly people are getting infected. So, although the blue states have fared worse, they've managed to slow the spread substantially. Not sure what Arizona is doing.  
+  
+Since we are concerned about the rate of increase, we should not be looking at totals. We should be looking at what epidemiologists refer to as *log first differences*. Basically, this is a way to look at the percent change from day to day. For example, if my log first differences were consistently 1%, that would indicate that I am realizing a 1% increase in daily cases **each day**, which would lead to exponential growth. Anything below 1% would indicate a rate that is slowing to 0. Let's take a look at that for the states above beginning around mid-April (when the whole "wear a mask, please" conversation began).  
+  
+Also note that this time series data has a lot of weekly variation, so, I'll smooth that using a 7-day rolling average.
+  
+```{r}
+
+top_3_lag_over_time <- full_df %>% 
+  # subset by top 3 states in each category
+  filter(state %in% top_3) %>% 
+  # ensuring dates are unique for each state and if not, summing them
+  group_by(state, date) %>% 
+  mutate(sum_cases = sum(cases)) %>% 
+  # Once summed, ensure dates are unique
+  distinct(date, .keep_all = TRUE) %>% 
+  ungroup() %>% 
+  group_by(state) %>% 
+  arrange(date) %>% 
+  # log(firstdiff) 
+  # Reference: Community Use Of Face Masks And COVID-19: 
+  #     Evidence From A Natural Experiment Of State Mandates In The US
+  mutate(lag_cases = (log(sum_cases) - lag(log(sum_cases)))*100,
+         # rolling average from the `zoo` package
+         rolling_lag = rollmean(lag_cases, k = 7, fill = NA)) %>% 
+  filter(date > ymd("2020-04-15"))
+
+ggplot(top_3_lag_over_time, 
+       aes(x = date, y = rolling_lag/100, color = vote, shape = state)) +
+  geom_point() +
+  geom_line() +
+  scale_y_continuous(labels = scales::percent) +
+  scale_color_manual(values = c("blue", "red"),
+                     name = "Political Leaning") +
+  theme_fivethirtyeight() + 
+  labs(
+    title = "Percent Increase in Daily Cases",
+    subtitle = "7-day rolling average for most impacted states"
+  ) +
+  guides(color = FALSE)
+```
+  
+From the graph prior to this one (the one with Arizona blasting off), we could've probably inferred this graph. We see that Arizona has consistently large percent increase day-to-day over time. In addition, we see that the blue state's (even though cases are still going up) rate of infection is trending towards 0). 
+  
+From this... we can see a clear difference in trend. So, if we put this all together, what does it look like? Can we sum all identified red and blue states to see a more general trend?  
+  
+```{r}
+vote_aggregated_data <- full_df %>% 
+  # get rid of states w/ inconsistent voting
+  filter(!is.na(vote)) %>% 
+  # sum cases by dates and voting
+  group_by(vote, date) %>% 
+  mutate(sum_cases = sum(cases)) %>% 
+  # Once summed, ensure dates are unique
+  distinct(date, .keep_all = TRUE) %>% 
+  ungroup() %>% 
+  group_by(vote) %>% 
+  arrange(date) %>% 
+  # log(firstdiff) 
+  # Reference: Community Use Of Face Masks And COVID-19: 
+  #     Evidence From A Natural Experiment Of State Mandates In The US
+  mutate(lag_cases = (log(sum_cases) - lag(log(sum_cases)))*100,
+         # rolling average from the `zoo` package
+         rolling_lag = rollmean(lag_cases, k = 7, fill = NA)) %>% 
+  filter(date > ymd("2020-04-15"))
+
+# ------- Plotting Data
+ggplot(vote_aggregated_data, aes(x = date,  y = rolling_lag/100, color = vote)) +
+  geom_point() +
+  geom_line() +
+  theme_fivethirtyeight() +
+  scale_y_continuous(labels = scales::percent) +
+  scale_color_manual(values = c("blue", "red"),
+                     name = "Political Leaning") +
+  labs(
+    title = "Percent Daily Change of COVID-19 Cases",
+    subtitle = "aggregate of historically red v. blue states"
+  )
+```
