@@ -19,7 +19,9 @@ library(ggthemes)
 
 theme_set(theme_fivethirtyeight())
 theme_update(panel.background = element_rect(fill = "transparent", colour = NA),
-             plot.background = element_rect(fill = "transparent", colour = NA))
+             plot.background = element_rect(fill = "transparent", colour = NA),
+             legend.background = element_rect(fill = "transparent", colour = NA),
+             legend.key = element_rect(fill = "transparent", colour = NA))
 ```
 
 In keeping track of the political pundits, you can make a guess about the political leanings of a person simply by whether or not one thinks masks are a good idea. Unfortunately in such a polarized world, the words of our Governors and the President can have far-reaching health impacts. Because we now have amassed *a lot* of COVID-19 data, we can see that this is true to some extent.  
@@ -147,26 +149,7 @@ ggplot(top_3_over_time, aes(x = date, y = case_per_pop, color = vote, shape = st
     title = "Top 3 Impacted States by Political Leaning",
     subtitle = "by cumulative cases as a percent of their population"
   ) +
-  guides(color = FALSE) +
-  # Let's add some annotations:
-  # # annotations for blue states
-  annotate(geom = "curve", x = (as.Date("2020-05-01")), y = 0.0175, xend = (as.Date("2020-05-01")-5), yend = 0.018,
-           curvature = .2, color = "blue", arrow = arrow(length = unit(1, "mm")), alpha = 0.4) +
-  annotate(geom = "text",  x = (as.Date("2020-05-01")-20), y = 0.018, size = 4.5,
-           label = "'Masks work...'",
-           hjust = "left",
-           lineheight = 1.0,
-           color = "blue",
-           alpha = 0.7) +
-  # # annotations for red states
-  annotate(geom = "curve", x = (as.Date("2020-06-01") + 1), y = 0.0023, xend = (as.Date("2020-06-01")+5), yend = 0.0018,
-           curvature = .2, color = "red", arrow = arrow(length = unit(1, "mm")), alpha = 0.4) +
-  annotate(geom = "text",  x = (as.Date("2020-06-01") + 6), y = 0.002, size = 4.5,
-           label = "'... Nope.'",
-           hjust = "left",
-           lineheight = 1.0,
-           alpha = 0.6,
-           color = "red")
+  guides(color = FALSE)
 
 ```
   
