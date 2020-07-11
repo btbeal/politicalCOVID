@@ -115,7 +115,7 @@ ggplot(top_totals, aes(x = reorder(state, -tot_cases_per_population),
 
 ```
 
-No big surprises here. The North East was hit fairly hard. Though, not to be bested, Arizona and Louisiana also found their way to the top. But the whole point here was to make sure that the states that may have had the worst of it are represented, which it seems like they are.  
+No big surprises here. The Northeast was hit fairly hard. Though, not to be bested, Arizona and Louisiana also found their way to the top. But the whole point here was to make sure that the states that may have had the worst of it are represented, which it seems like they are. Mostly, I wanted to ensure that the really bad blue states were not left out due to my selection criteria - same for the red states.  
   
 But I'm not necessarily worried about the case totals. A lot of states on both sides of the aisle were struggling to contain outbreak towards the beginning. Let's look at the top 3 states for each voting pattern over time (regarding their cumulative cases).  
   
@@ -144,20 +144,22 @@ ggplot(top_3_over_time, aes(x = date, y = case_per_pop, color = vote, shape = st
   scale_color_manual(values = c("blue", "red"),
                      name = "Political Leaning") +
   #theme_fivethirtyeight() + 
-    scale_y_continuous(labels = scales::percent) +
+  scale_y_continuous(labels = scales::percent) +
   labs(
     title = "Top 3 Impacted States by Political Leaning",
-    subtitle = "by cumulative cases as a percent of their population"
+    subtitle = "cumulative cases as a % of population"
   ) +
   guides(color = FALSE)
 
 ```
   
-This kind of gets at my prior assumptions. True, the top 3 blue states (states that I anticipated to be a bit more concerned), tend to have more cases per population, what really matters in epidemiology is the *rate* of increase. How quickly people are getting infected. So, although the blue states have fared worse, they've managed to slow the spread substantially. Not sure what Arizona is doing.  
+This kind of gets at my prior assumptions. True, the top 3 blue states (states that I anticipated to have taken the pandemic more seriously), tend to have more cases per population. But what really matters in epidemiology is the *rate* of increase. How quickly people are getting infected. So, although the blue states have fared worse, they've managed to slow the spread substantially. Not sure what Arizona is doing.  
   
-Since we are concerned about the rate of increase, we should not be looking at totals. We should be looking at what epidemiologists refer to as *log first differences*. Basically, this is a way to look at the percent change from day to day. For example, if my log first differences were consistently 1%, that would indicate that I am realizing a 1% increase in daily cases **each day**, which would lead to exponential growth. Anything below 1% would indicate a rate that is slowing to 0. Let's take a look at that for the states above beginning around mid-April (when the whole "wear a mask, please" conversation began).  
+Since we are concerned about the rate of increase, we should not be looking at totals. We should be looking at what epidemiologists refer to as **log first differences**. Basically, this is a way to approximate the percent change from day to day (there are advantages to the approximation - consider that a 50% decrease followed by a 50% increase leaves one in a lower position. Whereas, a -0.5 log first difference followed by a +0.5 log first difference puts one back at 0).  
   
-Also note that this time series data has a lot of weekly variation, so, I'll smooth that using a 7-day rolling average.
+Jargon aside, I want to take a look at that for the states above beginning around mid-April (when the whole "wear a mask, please" conversation began). This should provide better information regarding the rate of disease spreading in red versus blue states.  
+  
+Also note that this time series data has a lot of weekly fluctuation. I'll use a 7-day rolling average here to "smooth" the trend.
   
 ```{r}
 
@@ -175,13 +177,13 @@ top_3_lag_over_time <- full_df %>%
   # log(firstdiff) 
   # Reference: Community Use Of Face Masks And COVID-19: 
   #     Evidence From A Natural Experiment Of State Mandates In The US
-  mutate(lag_cases = (log(sum_cases) - lag(log(sum_cases)))*100,
+  mutate(lag_cases = (log(sum_cases) - lag(log(sum_cases))),
          # rolling average from the `zoo` package
          rolling_lag = rollmean(lag_cases, k = 7, fill = NA)) %>% 
   filter(date > ymd("2020-04-15"))
 
 ggplot(top_3_lag_over_time, 
-       aes(x = date, y = rolling_lag/100, color = vote, shape = state)) +
+       aes(x = date, y = rolling_lag, color = vote, shape = state)) +
   geom_point() +
   geom_line() +
   scale_y_continuous(labels = scales::percent) +
@@ -189,16 +191,16 @@ ggplot(top_3_lag_over_time,
                      name = "Political Leaning") +
   #theme_fivethirtyeight() + 
   labs(
-    title = "Percent Increase in Daily Cases",
-    subtitle = "7-day rolling average for most impacted states"
+    title = "Approximation of % Increase in Daily Cases",
+    subtitle = "7-day rolling average"
   ) +
   guides(color = FALSE)
 ```
   
-From the graph prior to this one (the one with Arizona blasting off), we could've probably inferred this graph. We see that Arizona has consistently large percent increase day-to-day over time. In addition, we see that the blue state's (even though cases are still going up) rate of infection is trending towards 0). 
+From the graph prior to this one (the one with Arizona blasting off), we could've probably inferred this graph. We see that Arizona has consistently large percent increase day-to-day over time. In addition, we see that the blue state's rate of infection is trending towards 0, even though the cases are still rising slightly. Intuitively, this slope (or rate of change) describes how well one is containing the pandemic. 
   
-From this... we can see a clear difference in trend. So, if we put this all together, what does it look like? Can we sum all identified red and blue states to see a more general trend?  
-  
+Unfortunatley, we can see a clear difference in trend. If we put this all together, what does it look like? I'm going to sum the cumulative cases, by date, and then take the log first differences of those over time. We should then be able to see the rate of increase (generally) by red versus blue state.  
+
 ```{r}
 vote_aggregated_data <- full_df %>% 
   # get rid of states w/ inconsistent voting
@@ -214,13 +216,13 @@ vote_aggregated_data <- full_df %>%
   # log(firstdiff) 
   # Reference: Community Use Of Face Masks And COVID-19: 
   #     Evidence From A Natural Experiment Of State Mandates In The US
-  mutate(lag_cases = (log(sum_cases) - lag(log(sum_cases)))*100,
+  mutate(lag_cases = (log(sum_cases) - lag(log(sum_cases))),
          # rolling average from the `zoo` package
          rolling_lag = rollmean(lag_cases, k = 7, fill = NA)) %>% 
   filter(date > ymd("2020-04-15"))
 
 # ------- Plotting Data
-ggplot(vote_aggregated_data, aes(x = date,  y = rolling_lag/100, color = vote)) +
+ggplot(vote_aggregated_data, aes(x = date,  y = rolling_lag, color = vote)) +
   geom_point() +
   geom_line() +
   #theme_fivethirtyeight() +
@@ -232,3 +234,8 @@ ggplot(vote_aggregated_data, aes(x = date,  y = rolling_lag/100, color = vote)) 
     subtitle = "aggregate of historically red v. blue states"
   )
 ```
+  
+At face value, this seems fairly damning - it's no surprise that politics can be harmful. But we should consider some other potentials:  
+  
+  1. It could be that those struck early (mostly blue states) have since taken the threat more serioulsy because they were able to see it firsthand.
+  2. 
