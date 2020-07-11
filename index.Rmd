@@ -3,8 +3,9 @@ title: "COVID Response: a political battle"
 author: "Brennan T. Beal, PharmD, MS"
 output: 
   html_document:
-      theme: yeti
+      theme: simplex
       toc: TRUE
+      toc_float: TRUE
       code_folding: hide
 ---
 
